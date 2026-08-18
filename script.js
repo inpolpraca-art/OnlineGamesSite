@@ -1,9 +1,10 @@
-// Bandit Wheel — игровая версия без реальных денег.
-// Низкие множители встречаются чаще, как на референсе Rust Bandit Camp.
-const sectors = [
-  1,1,1,1,1,1,1,1,1,1,1,1,
-  3,3,3,3,
-  5,5,
+// Bandit Wheel — автоматические раунды.
+// Новый раунд каждые 20 секунд. Во время вращения ставки полностью заблокированы.
+
+const BASE_SECTORS = [
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  3, 3, 3, 3,
+  5, 5,
   10,
   20
 ];
@@ -16,10 +17,13 @@ const values = {
   20: { color:'#bd4830', text:'#fff0d5' }
 };
 
+const BET_STEP = 10;
+const ROUND_BETTING_SECONDS = 20;
+const SPIN_DURATION = 4800;
+
 const canvas = document.querySelector('#wheel');
 const ctx = canvas.getContext('2d');
 
-const spinButton = document.querySelector('#spin-button');
 const dialog = document.querySelector('#result-dialog');
 const resultTitle = document.querySelector('#result-title');
 const resultText = document.querySelector('#result-text');
@@ -28,99 +32,179 @@ const resultIcon = document.querySelector('#result-icon');
 const countEl = document.querySelector('#spin-count');
 const lastNumberEl = document.querySelector('#last-number');
 const balanceEl = document.querySelector('#balance');
-
-const betAmountEl = document.querySelector('#bet-amount');
+const availableBalanceEl = document.querySelector('#available-balance');
 const summaryAmountEl = document.querySelector('#summary-amount');
-const summaryMultiplierEl = document.querySelector('#summary-multiplier');
-const potentialWinEl = document.querySelector('#potential-win');
 
+const timerEl = document.querySelector('#timer');
+const countdownEl = document.querySelector('#countdown');
+const roundStateEl = document.querySelector('#round-state');
+const roundLabelEl = document.querySelector('#round-label');
+const roundHintEl = document.querySelector('#round-hint');
+
+let sectors = [...BASE_SECTORS];
 let rotation = 0;
 let spinning = false;
+let acceptingBets = true;
 let spins = 0;
+let secondsLeft = ROUND_BETTING_SECONDS;
+let timerId = null;
+let roundStartedAt = 0;
+let recentResults = JSON.parse(localStorage.getItem('bandit_recent_results') || '[]');
 
 let balance = Number(localStorage.getItem('bandit_balance'));
 if (!Number.isFinite(balance) || balance < 0) balance = 1000;
 
-let betAmount = Number(localStorage.getItem('bandit_bet_amount'));
-if (!Number.isFinite(betAmount) || betAmount < 1) betAmount = 10;
-
-let selectedMultiplier = Number(localStorage.getItem('bandit_multiplier')) || 1;
-
-const MIN_BET = 1;
-const BET_STEP = 5;
-const MAX_BET = 1000;
-
-function saveState() {
-  localStorage.setItem('bandit_balance', String(balance));
-  localStorage.setItem('bandit_bet_amount', String(betAmount));
-  localStorage.setItem('bandit_multiplier', String(selectedMultiplier));
-}
+// Отдельная ставка на каждый множитель.
+const bets = {
+  1: 0,
+  3: 0,
+  5: 0,
+  10: 0,
+  20: 0
+};
 
 function formatTokens(value) {
   return Math.max(0, Math.floor(value)).toLocaleString('ru-RU');
 }
 
-function updateUI() {
-  balanceEl.textContent = formatTokens(balance);
-  betAmountEl.textContent = formatTokens(betAmount);
-  summaryAmountEl.textContent = formatTokens(betAmount);
-  summaryMultiplierEl.textContent = selectedMultiplier;
-  potentialWinEl.textContent = formatTokens(betAmount * selectedMultiplier);
-
-  document.querySelectorAll('.quick-bet').forEach(button => {
-    button.classList.toggle('active', Number(button.dataset.amount) === betAmount);
-  });
+function totalBets() {
+  return Object.values(bets).reduce((sum, value) => sum + value, 0);
 }
 
-document.querySelector('#bet-grid').innerHTML =
-  Object.keys(values).map(number => `
-    <button class="bet ${Number(number) === selectedMultiplier ? 'selected' : ''}"
-            type="button"
-            data-number="${number}"
-            style="--bet-color:${values[number].color}">
-      <b>×${number}</b>
-      <span>${number == 20 ? 'редкий' : 'множитель'}</span>
-    </button>
+function saveBalance() {
+  localStorage.setItem('bandit_balance', String(balance));
+}
+
+function shuffleSectors() {
+  // Перемешиваем числа перед каждым новым раундом.
+  sectors = [...BASE_SECTORS];
+
+  for (let i = sectors.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [sectors[i], sectors[j]] = [sectors[j], sectors[i]];
+  }
+}
+
+function buildBetGrid() {
+  document.querySelector('#bet-grid').innerHTML = Object.keys(values).map(number => `
+    <div class="bet-row" data-number="${number}" style="--bet-color:${values[number].color}">
+      <div class="bet-info">
+        <b>×${number}</b>
+        <span>${number == 20 ? 'редкий множитель' : 'множитель'}</span>
+      </div>
+
+      <button class="bet-control" type="button" data-action="minus" data-number="${number}" aria-label="Уменьшить ставку на ${number}">−</button>
+
+      <div class="bet-amount">
+        <strong id="bet-${number}">0</strong>
+        <small>токенов</small>
+      </div>
+
+      <button class="bet-control" type="button" data-action="plus" data-number="${number}" aria-label="Увеличить ставку на ${number}">+</button>
+    </div>
   `).join('');
 
-document.querySelectorAll('.bet').forEach(button => {
-  button.addEventListener('click', () => {
-    if (spinning) return;
+  document.querySelectorAll('.bet-control').forEach(button => {
+    button.addEventListener('click', () => {
+      if (!acceptingBets || spinning) return;
 
-    selectedMultiplier = Number(button.dataset.number);
+      const number = Number(button.dataset.number);
+      const action = button.dataset.action;
 
-    document.querySelector('.bet.selected')?.classList.remove('selected');
-    button.classList.add('selected');
-
-    saveState();
-    updateUI();
+      if (action === 'plus') changeBet(number, BET_STEP);
+      if (action === 'minus') changeBet(number, -BET_STEP);
+    });
   });
-});
-
-function setBetAmount(amount) {
-  if (spinning) return;
-
-  betAmount = Math.max(MIN_BET, Math.min(MAX_BET, Math.floor(amount)));
-
-  if (betAmount > balance && balance > 0) {
-    betAmount = balance;
-  }
-
-  saveState();
-  updateUI();
 }
 
-document.querySelector('#bet-minus').addEventListener('click', () => {
-  setBetAmount(betAmount - BET_STEP);
-});
+function changeBet(number, delta) {
+  if (!acceptingBets || spinning) return;
 
-document.querySelector('#bet-plus').addEventListener('click', () => {
-  setBetAmount(betAmount + BET_STEP);
-});
+  if (delta > 0) {
+    const available = balance - totalBets();
 
-document.querySelectorAll('.quick-bet').forEach(button => {
-  button.addEventListener('click', () => setBetAmount(Number(button.dataset.amount)));
-});
+    if (available < delta) {
+      return;
+    }
+
+    bets[number] += delta;
+  } else {
+    bets[number] = Math.max(0, bets[number] + delta);
+    // Возвращаем уменьшенную ставку в доступный баланс.
+  }
+
+  renderBets();
+}
+
+function renderBets() {
+  const total = totalBets();
+
+  balanceEl.textContent = formatTokens(balance);
+  availableBalanceEl.textContent = formatTokens(balance - total);
+  summaryAmountEl.textContent = formatTokens(total);
+
+  Object.keys(bets).forEach(number => {
+    const amountEl = document.querySelector(`#bet-${number}`);
+    if (amountEl) amountEl.textContent = formatTokens(bets[number]);
+
+    const row = document.querySelector(`.bet-row[data-number="${number}"]`);
+    if (row) row.classList.toggle('has-bet', bets[number] > 0);
+    if (row) row.classList.toggle('locked', !acceptingBets || spinning);
+  });
+
+  document.querySelectorAll('.bet-control').forEach(button => {
+    button.disabled = !acceptingBets || spinning;
+  });
+}
+
+function clearBets() {
+  Object.keys(bets).forEach(number => {
+    bets[number] = 0;
+  });
+  renderBets();
+}
+
+
+function renderRecentResults() {
+  const el = document.querySelector('#recent-results');
+  if (!el) return;
+  if (!recentResults.length) {
+    el.innerHTML = '<span class="recent-empty">Пока нет результатов</span>';
+    return;
+  }
+  el.innerHTML = recentResults.slice(0, 3).map(number => `
+    <div class="recent-item" style="--result-color:${values[number].color}">×${number}</div>
+  `).join('');
+}
+
+const PLAYER_NAMES = ['RustKid', 'Bandit_77', 'Wolf', 'Nikita', 'Hunter', 'Kira'];
+function renderPlayers() {
+  const grid = document.querySelector('#players-grid');
+  if (!grid) return;
+  const rows = PLAYER_NAMES.slice(0, 6).map((name, index) => {
+    const picks = [1,3,5,10,20].filter((_, i) => (index + i) % 3 === 0).slice(0, 2);
+    const betsForPlayer = picks.map((number, j) => ({ number, amount: (index + j + 1) * 10 }));
+    const total = betsForPlayer.reduce((s,b) => s+b.amount, 0);
+    return { name, bets: betsForPlayer, total };
+  });
+  grid.innerHTML = rows.map(row => `
+    <div class="player-card">
+      <div class="player-top">
+        <span class="player-name">${row.name}</span>
+        <span class="player-total">${formatTokens(row.total)} токенов</span>
+      </div>
+      <div class="player-bets">
+        ${row.bets.map(b => `<span class="player-bet" style="--bet-color:${values[b.number].color}">×${b.number} · ${formatTokens(b.amount)}</span>`).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function updatePlayersStatus() {
+  const status = document.querySelector('#players-status');
+  if (!status) return;
+  status.textContent = acceptingBets ? 'Принимаются ставки' : 'Ставки закрыты';
+}
 
 function drawWheel(angle = rotation) {
   const size = canvas.width;
@@ -148,6 +232,7 @@ function drawWheel(angle = rotation) {
     ctx.lineWidth = 5;
     ctx.stroke();
 
+    // Лёгкая "поношенная" текстура.
     ctx.save();
     ctx.clip();
     ctx.globalAlpha = .16;
@@ -178,7 +263,7 @@ function drawWheel(angle = rotation) {
     ctx.restore();
   });
 
-  // Центр колеса.
+  // Центр.
   ctx.beginPath();
   ctx.arc(0, 0, radius * .275, 0, Math.PI * 2);
   ctx.fillStyle = '#c8b998';
@@ -213,7 +298,6 @@ function drawWheel(angle = rotation) {
 }
 
 function getWinner() {
-  // Вращаем случайный сектор с сохранением реальной раскладки.
   const winnerIndex = Math.floor(Math.random() * sectors.length);
   return {
     index: winnerIndex,
@@ -221,41 +305,82 @@ function getWinner() {
   };
 }
 
-function spin() {
+function setRoundUI() {
+  timerEl.textContent = secondsLeft;
+  countdownEl.textContent = acceptingBets
+    ? `${secondsLeft} сек`
+    : 'СТОП';
+
+  updatePlayersStatus();
+
+  if (acceptingBets) {
+    roundStateEl.textContent = 'СТАВКИ';
+    roundLabelEl.textContent = 'Сделайте ставки';
+    roundHintEl.textContent = 'Можно ставить сразу на все числа';
+  } else {
+    roundStateEl.textContent = 'ИГРА';
+    roundLabelEl.textContent = 'Колесо вращается';
+    roundHintEl.textContent = 'Ставки временно заблокированы';
+  }
+}
+
+function startBettingPhase() {
+  acceptingBets = true;
+  spinning = false;
+  secondsLeft = ROUND_BETTING_SECONDS;
+  roundStartedAt = Date.now();
+
+  // Новая раскладка чисел для нового раунда.
+  shuffleSectors();
+  drawWheel(rotation);
+  setRoundUI();
+  renderBets();
+
+  clearInterval(timerId);
+  timerId = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - roundStartedAt) / 1000);
+    secondsLeft = Math.max(0, ROUND_BETTING_SECONDS - elapsed);
+    setRoundUI();
+
+    if (secondsLeft <= 0) {
+      clearInterval(timerId);
+      startRound();
+    }
+  }, 250);
+}
+
+function startRound() {
   if (spinning) return;
 
-  if (balance < betAmount) {
-    resultIcon.textContent = '!';
-    resultIcon.style.background = '#bd4830';
-    resultIcon.style.color = '#fff0d5';
-    resultTitle.textContent = 'Недостаточно токенов';
-    resultText.textContent = `У вас ${formatTokens(balance)} токенов, а ставка составляет ${formatTokens(betAmount)}.`;
-    dialog.showModal();
-    return;
-  }
-
+  acceptingBets = false;
   spinning = true;
-  spinButton.disabled = true;
+  setRoundUI();
+  renderBets();
 
-  // Ставка списывается перед вращением.
-  balance -= betAmount;
-  saveState();
-  updateUI();
+  // Все ставки этого раунда списываются перед вращением.
+  const lockedTotal = totalBets();
+  balance -= lockedTotal;
+  saveBalance();
+  renderBets();
 
   const winner = getWinner();
-  const slice = Math.PI * 2 / sectors.length;
+  animateToWinner(winner);
+}
 
+function animateToWinner(winner) {
+  const slice = Math.PI * 2 / sectors.length;
   const current = rotation % (Math.PI * 2);
+
+  // Сектор-победитель ставим точно под указатель сверху.
   const target = -winner.index * slice - slice / 2;
   const extraTurns = Math.PI * 2 * (7 + Math.floor(Math.random() * 3));
   const finish = rotation + extraTurns + (target - current);
 
   const start = rotation;
-  const duration = 4800;
   const startedAt = performance.now();
 
   function animate(now) {
-    const progress = Math.min((now - startedAt) / duration, 1);
+    const progress = Math.min((now - startedAt) / SPIN_DURATION, 1);
     const eased = 1 - Math.pow(1 - progress, 4);
 
     rotation = start + (finish - start) * eased;
@@ -263,31 +388,32 @@ function spin() {
 
     if (progress < 1) {
       requestAnimationFrame(animate);
-    } else {
-      rotation %= Math.PI * 2;
-      spinning = false;
-      spinButton.disabled = false;
-      showResult(winner.number);
+      return;
     }
+
+    rotation %= Math.PI * 2;
+    spinning = false;
+    finishRound(winner.number);
   }
 
   requestAnimationFrame(animate);
 }
 
-function showResult(number) {
+function finishRound(number) {
   spins++;
   countEl.textContent = spins;
   lastNumberEl.textContent = `×${number}`;
 
-  const won = number === selectedMultiplier;
-  const payout = won ? betAmount * number : 0;
+  const total = totalBets();
+  const winningBet = bets[number] || 0;
+  const payout = winningBet * number;
 
-  if (won) {
-    balance += payout;
-  }
+  // Все поставленные токены уже зарезервированы в балансе:
+  // здесь возвращается только выигрышная выплата.
+  balance += payout;
+  saveBalance();
 
-  saveState();
-  updateUI();
+  const won = winningBet > 0;
 
   resultIcon.textContent = number;
   resultIcon.style.background = values[number].color;
@@ -297,28 +423,52 @@ function showResult(number) {
     ? `Победа ×${number}!`
     : `Выпало ×${number}`;
 
-  resultText.textContent = won
-    ? `Вы поставили ${formatTokens(betAmount)} токенов и выиграли ${formatTokens(payout)} токенов.`
-    : `Вы поставили ${formatTokens(betAmount)} токенов на ×${selectedMultiplier}. Выиграл сектор ×${number}.`;
+  if (total === 0) {
+    resultText.textContent = `Раунд завершён. Выиграл множитель ×${number}.`;
+  } else if (won) {
+    resultText.textContent =
+      `На ×${number} было поставлено ${formatTokens(winningBet)} токенов. Выплата: ${formatTokens(payout)} токенов. Общая сумма ставок: ${formatTokens(total)}.`;
+  } else {
+    resultText.textContent =
+      `Выпало ×${number}, но на него не было ставки. Сумма ставок за раунд: ${formatTokens(total)} токенов.`;
+  }
 
-  dialog.showModal();
+  recentResults.unshift(number);
+  recentResults = recentResults.slice(0, 3);
+  localStorage.setItem('bandit_recent_results', JSON.stringify(recentResults));
+  renderRecentResults();
+
+  clearBets();
+  renderBets();
+
+  // Небольшое окно результата, после которого сразу начинается новый 20-секундный цикл.
+  if (typeof dialog.showModal === 'function') {
+    dialog.showModal();
+  }
+
+  setTimeout(() => {
+    if (dialog.open) dialog.close();
+    startBettingPhase();
+  }, 2200);
 }
 
-spinButton.addEventListener('click', spin);
-
 document.querySelector('#play-again').addEventListener('click', () => {
-  dialog.close();
-  setTimeout(spin, 100);
+  if (dialog.open) dialog.close();
 });
 
-// Кнопка + теперь выдаёт небольшую демонстрационную порцию игровых токенов.
 document.querySelector('#wallet-add').addEventListener('click', () => {
-  if (spinning) return;
+  // Только виртуальные демонстрационные токены.
+  if (!acceptingBets || spinning) return;
 
   balance += 100;
-  saveState();
-  updateUI();
+  saveBalance();
+  renderBets();
 });
 
-updateUI();
+buildBetGrid();
+renderRecentResults();
+renderPlayers();
+shuffleSectors();
+renderBets();
 drawWheel();
+startBettingPhase();

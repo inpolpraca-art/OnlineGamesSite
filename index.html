@@ -24,7 +24,7 @@
     <section class="hero" aria-labelledby="game-title">
       <p class="eyebrow"><span></span> bandit camp</p>
       <h1 id="game-title">Колесо<br /><em>бандита.</em></h1>
-      <p class="intro">Выбери множитель и размер ставки. Чем выше множитель, тем реже он встречается на колесе.</p>
+      <p class="intro">Ставь сразу на несколько чисел. Новый раунд начинается каждые 20 секунд, а во время вращения ставки заблокированы.</p>
 
       <div class="stats" aria-label="Статистика игры">
         <div><strong id="spin-count">0</strong><span>вращений</span></div>
@@ -33,59 +33,59 @@
     </section>
 
     <section class="wheel-area" aria-label="Колесо удачи">
-      <div class="spark spark-one"></div>
-      <div class="spark spark-two"></div>
-      <div class="spark spark-three"></div>
-
       <div class="pointer" aria-hidden="true"></div>
 
       <div class="wheel-frame">
         <canvas id="wheel" width="760" height="760" aria-label="Колесо с множителями"></canvas>
-        <button class="spin-button" id="spin-button" type="button" aria-label="Крутить колесо">
-          <span>КРУТИТЬ</span>
-          <small>испытай удачу</small>
+        <button class="spin-button" id="spin-button" type="button" disabled>
+          <span id="round-state">СТАВКИ</span>
+          <small id="countdown">20 сек</small>
         </button>
+      </div>
+      <div class="recent-results" aria-label="Последние результаты">
+        <div class="recent-title">Последние 3 результата</div>
+        <div class="recent-list" id="recent-results"></div>
       </div>
     </section>
 
-    <section class="prizes" aria-label="Настройки ставки">
-      <p class="eyebrow"><span></span> настройка ставки</p>
+    <section class="prizes" aria-label="Настройки ставок">
+      <p class="eyebrow"><span></span> настройка ставок</p>
 
       <div class="bet-panel">
-        <div class="panel-title">Сколько поставить?</div>
-
-        <div class="amount-row">
-          <button class="amount-control" id="bet-minus" type="button">−</button>
-          <div class="amount-display">
-            <span id="bet-amount">10</span>
-            <small>токенов</small>
+        <div class="round-banner">
+          <div>
+            <strong id="round-label">Сделайте ставки</strong>
+            <span id="round-hint">Можно ставить на все числа</span>
           </div>
-          <button class="amount-control" id="bet-plus" type="button">+</button>
+          <b><span id="timer">20</span>с</b>
         </div>
 
-        <div class="quick-bets">
-          <button type="button" class="quick-bet" data-amount="10">10</button>
-          <button type="button" class="quick-bet" data-amount="25">25</button>
-          <button type="button" class="quick-bet" data-amount="50">50</button>
-          <button type="button" class="quick-bet" data-amount="100">100</button>
-          <button type="button" class="quick-bet" data-amount="250">250</button>
-        </div>
-
-        <div class="panel-title multiplier-title">На какой множитель?</div>
+        <div class="panel-title">Ставка на каждый множитель</div>
         <div class="bet-grid" id="bet-grid"></div>
 
         <div class="bet-summary">
-          <span>Ставка</span>
-          <strong><span id="summary-amount">10</span> токенов → ×<span id="summary-multiplier">1</span></strong>
+          <span>Всего поставлено</span>
+          <strong><span id="summary-amount">0</span> токенов</strong>
         </div>
 
         <p class="balance">
-          Потенциальная выплата:
-          <strong id="potential-win">10</strong> токенов
+          Доступно:
+          <strong id="available-balance">1 000</strong> токенов
         </p>
       </div>
     </section>
   </main>
+
+  <section class="players-section" aria-label="Ставки игроков">
+    <div class="players-head">
+      <div>
+        <p class="eyebrow"><span></span> игроки</p>
+        <h2>Ставки игроков</h2>
+      </div>
+      <span class="players-status" id="players-status">Ожидание ставок</span>
+    </div>
+    <div class="players-grid" id="players-grid"></div>
+  </section>
 
   <footer>
     <div class="footer-brand"><span>✦</span> BANDIT WHEEL</div>
@@ -102,7 +102,7 @@
     <p class="eyebrow">результат раунда</p>
     <h2 id="result-title">Выпало ×1</h2>
     <p id="result-text"></p>
-    <button id="play-again" type="button">Ещё раз</button>
+    <button id="play-again" type="button">Закрыть</button>
   </dialog>
 
   <script src="script.js"></script>
