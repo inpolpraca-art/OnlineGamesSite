@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#130e2d" />
+    <title>Bandit Wheel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Unbounded:wght@600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="wallet" aria-label="Игровой баланс">
+      <span class="coin">◆</span>
+      <div><small>ваш баланс</small><strong id="balance">1 000</strong></div>
+      <button class="wallet-add" type="button" aria-label="Добавить фишки">+</button>
+    </div>
+    <main class="game-shell">
+      <section class="hero" aria-labelledby="game-title">
+        <p class="eyebrow"><span></span> bandit camp</p>
+        <h1 id="game-title">Колесо<br /><em>бандита.</em></h1>
+        <p class="intro">Выбери число. Чем выше множитель, тем реже он встречается на колесе.</p>
+
+        <div class="stats" aria-label="Статистика игры">
+          <div><strong id="spin-count">0</strong><span>вращений</span></div>
+          <div><strong id="last-number">—</strong><span>последнее число</span></div>
+        </div>
+      </section>
+
+      <section class="wheel-area" aria-label="Колесо удачи">
+        <div class="spark spark-one"></div><div class="spark spark-two"></div><div class="spark spark-three"></div>
+        <div class="pointer" aria-hidden="true"><i></i></div>
+        <div class="wheel-frame">
+          <canvas id="wheel" width="760" height="760" aria-label="Колесо с числами"></canvas>
+          <button class="spin-button" id="spin-button" type="button" aria-label="Крутить колесо">
+            <span>КРУТИТЬ</span><small>испытай удачу</small>
+          </button>
+        </div>
+      </section>
+
+      <section class="prizes" aria-label="Ставка">
+        <p class="eyebrow"><span></span> выберите ставку</p>
+        <div class="bet-grid" id="bet-grid"></div>
+        <p class="balance">Стоимость вращения: <strong>10</strong> фишек</p>
+      </section>
+    </main>
+
+    <footer>
+      <div class="footer-brand"><span>✦</span> BANDIT WHEEL</div>
+      <p>Испытай удачу. Игровые фишки не имеют реальной ценности.</p>
+      <div class="footer-links"><a href="#game-title">Правила</a><a href="#game-title">Поддержка</a></div>
+    </footer>
+
+    <dialog id="result-dialog">
+      <div class="result-icon" id="result-icon">✦</div>
+      <p class="eyebrow">результат раунда</p>
+      <h2 id="result-title">Выпало 1</h2>
+      <p id="result-text"></p>
+      <button id="play-again" type="button">Ещё раз</button>
+    </dialog>
+
+    <script src="script.js"></script>
+  </body>
+</html>
