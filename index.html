@@ -1,65 +1,110 @@
 <!doctype html>
 <html lang="ru">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#130e2d" />
-    <title>Bandit Wheel</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Unbounded:wght@600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body>
-    <div class="wallet" aria-label="Игровой баланс">
-      <span class="coin">◆</span>
-      <div><small>ваш баланс</small><strong id="balance">1 000</strong></div>
-      <button class="wallet-add" type="button" aria-label="Добавить фишки">+</button>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#130e2d" />
+  <title>Bandit Wheel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Unbounded:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="wallet" aria-label="Игровой баланс">
+    <span class="coin">◆</span>
+    <div>
+      <small>ваш баланс</small>
+      <strong id="balance">1 000</strong>
     </div>
-    <main class="game-shell">
-      <section class="hero" aria-labelledby="game-title">
-        <p class="eyebrow"><span></span> bandit camp</p>
-        <h1 id="game-title">Колесо<br /><em>бандита.</em></h1>
-        <p class="intro">Выбери число. Чем выше множитель, тем реже он встречается на колесе.</p>
+    <button class="wallet-add" id="wallet-add" type="button" aria-label="Добавить фишки">+</button>
+  </div>
 
-        <div class="stats" aria-label="Статистика игры">
-          <div><strong id="spin-count">0</strong><span>вращений</span></div>
-          <div><strong id="last-number">—</strong><span>последнее число</span></div>
+  <main class="game-shell">
+    <section class="hero" aria-labelledby="game-title">
+      <p class="eyebrow"><span></span> bandit camp</p>
+      <h1 id="game-title">Колесо<br /><em>бандита.</em></h1>
+      <p class="intro">Выбери множитель и размер ставки. Чем выше множитель, тем реже он встречается на колесе.</p>
+
+      <div class="stats" aria-label="Статистика игры">
+        <div><strong id="spin-count">0</strong><span>вращений</span></div>
+        <div><strong id="last-number">—</strong><span>последнее число</span></div>
+      </div>
+    </section>
+
+    <section class="wheel-area" aria-label="Колесо удачи">
+      <div class="spark spark-one"></div>
+      <div class="spark spark-two"></div>
+      <div class="spark spark-three"></div>
+
+      <div class="pointer" aria-hidden="true"></div>
+
+      <div class="wheel-frame">
+        <canvas id="wheel" width="760" height="760" aria-label="Колесо с множителями"></canvas>
+        <button class="spin-button" id="spin-button" type="button" aria-label="Крутить колесо">
+          <span>КРУТИТЬ</span>
+          <small>испытай удачу</small>
+        </button>
+      </div>
+    </section>
+
+    <section class="prizes" aria-label="Настройки ставки">
+      <p class="eyebrow"><span></span> настройка ставки</p>
+
+      <div class="bet-panel">
+        <div class="panel-title">Сколько поставить?</div>
+
+        <div class="amount-row">
+          <button class="amount-control" id="bet-minus" type="button">−</button>
+          <div class="amount-display">
+            <span id="bet-amount">10</span>
+            <small>токенов</small>
+          </div>
+          <button class="amount-control" id="bet-plus" type="button">+</button>
         </div>
-      </section>
 
-      <section class="wheel-area" aria-label="Колесо удачи">
-        <div class="spark spark-one"></div><div class="spark spark-two"></div><div class="spark spark-three"></div>
-        <div class="pointer" aria-hidden="true"><i></i></div>
-        <div class="wheel-frame">
-          <canvas id="wheel" width="760" height="760" aria-label="Колесо с числами"></canvas>
-          <button class="spin-button" id="spin-button" type="button" aria-label="Крутить колесо">
-            <span>КРУТИТЬ</span><small>испытай удачу</small>
-          </button>
+        <div class="quick-bets">
+          <button type="button" class="quick-bet" data-amount="10">10</button>
+          <button type="button" class="quick-bet" data-amount="25">25</button>
+          <button type="button" class="quick-bet" data-amount="50">50</button>
+          <button type="button" class="quick-bet" data-amount="100">100</button>
+          <button type="button" class="quick-bet" data-amount="250">250</button>
         </div>
-      </section>
 
-      <section class="prizes" aria-label="Ставка">
-        <p class="eyebrow"><span></span> выберите ставку</p>
+        <div class="panel-title multiplier-title">На какой множитель?</div>
         <div class="bet-grid" id="bet-grid"></div>
-        <p class="balance">Стоимость вращения: <strong>10</strong> фишек</p>
-      </section>
-    </main>
 
-    <footer>
-      <div class="footer-brand"><span>✦</span> BANDIT WHEEL</div>
-      <p>Испытай удачу. Игровые фишки не имеют реальной ценности.</p>
-      <div class="footer-links"><a href="#game-title">Правила</a><a href="#game-title">Поддержка</a></div>
-    </footer>
+        <div class="bet-summary">
+          <span>Ставка</span>
+          <strong><span id="summary-amount">10</span> токенов → ×<span id="summary-multiplier">1</span></strong>
+        </div>
 
-    <dialog id="result-dialog">
-      <div class="result-icon" id="result-icon">✦</div>
-      <p class="eyebrow">результат раунда</p>
-      <h2 id="result-title">Выпало 1</h2>
-      <p id="result-text"></p>
-      <button id="play-again" type="button">Ещё раз</button>
-    </dialog>
+        <p class="balance">
+          Потенциальная выплата:
+          <strong id="potential-win">10</strong> токенов
+        </p>
+      </div>
+    </section>
+  </main>
 
-    <script src="script.js"></script>
-  </body>
+  <footer>
+    <div class="footer-brand"><span>✦</span> BANDIT WHEEL</div>
+    <p>Испытай удачу. Игровые токены не имеют реальной ценности.</p>
+    <div class="footer-links">
+      <a href="#game-title">Правила</a>
+      <a href="#game-title">Поддержка</a>
+      <a href="#game-title">Discord</a>
+    </div>
+  </footer>
+
+  <dialog id="result-dialog">
+    <div class="result-icon" id="result-icon">✦</div>
+    <p class="eyebrow">результат раунда</p>
+    <h2 id="result-title">Выпало ×1</h2>
+    <p id="result-text"></p>
+    <button id="play-again" type="button">Ещё раз</button>
+  </dialog>
+
+  <script src="script.js"></script>
+</body>
 </html>
